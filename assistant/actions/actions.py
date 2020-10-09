@@ -241,7 +241,7 @@ class OpenIncidentForm(FormAction):
             incident_number = result.get("number")
             if incident_number:
                 message = (
-                    f"Incident {incident_number} has been opened for you :) "
+                    f'Incident {incident_number} has been opened for user with email {user_profile.get("email")}. '
                     f"A support specialist will reach out to you soon."
                 )
             else:
