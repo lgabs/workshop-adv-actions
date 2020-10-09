@@ -22,7 +22,7 @@ class SnowAPI:
             encoding="utf-8"
         )
         snow_instance = secret.get("instance")
-        self.base_api_url = f"https://{snow_instance}/api/now"        
+        self.base_api_url = f"https://{snow_instance}/api/now"
         self._session = None
 
         # Hook into the os's shutdown signal to
@@ -32,7 +32,7 @@ class SnowAPI:
         loop.add_signal_handler(signal.SIGTERM, task)
         self._loop = loop
 
-    async def open_session(self) -> ClientSession:  
+    async def open_session(self) -> ClientSession:
         """Opens the client session if it hasn't been opened yet,
            and returns the client session.
            Async session needs to be created on the event loop.
@@ -40,7 +40,7 @@ class SnowAPI:
            python constructors don't support async-await paradigm.
         Returns:
             The cached client session.
-        """      
+        """
         if self._session is not None:
             return self._session
 
@@ -48,33 +48,46 @@ class SnowAPI:
         json_headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-        }    
-        
+        }
+
         self._session = ClientSession(headers=json_headers, auth=self.auth)
         return self._session
 
     async def close_session(self):
         if self._session is not None:
-            await self._session.close()  
+            await self._session.close()
 
     async def get_user_profile(self, id: Text) -> Dict[Text, Any]:
         """Get the user profile associated with the given ID.
         Args:
-            id: Service now sys_id used to retrieve the user profile.            
+            id: Service now sys_id used to retrieve the user profile.
         Returns:
             A dictionary with user profile information.
         """
-        
+
         url = f"{self.base_api_url}/table/sys_user/{id}"
         session = await self.open_session()
 
         async with session.get(url) as resp:
             if resp.status != 200:
-                logger.error("Unable to load user profile. Status: %d", resp.status)
+                if resp.status == 404:
+                    logger.error("Profile not found. Status: %d", resp.status)
+                elif resp.status == 400:
+                    logger.error("Bad Request. Some client error. Check things such as invalid syntax. Status: %d", resp.status)
+                elif resp.status in [500, 503]:
+                    logger.error("Some server error occurred. Client request may be valid or invalid, but a problem from server side occurred and the request could not be processed (e.g. server down). Status: %d", resp.status)
+                else:
+                    logger.error("Unable to load user profile. Status: %d", resp.status)
+
                 return anonymous_profile
-            
+
+            if resp.headers['content-type'] != 'application/json':
+                logger.error("The request was successful, but unable to load user profile. It can be that the server is hibernating. Status: %d", resp.status)
+
+                return anonymous_profile
+
             resp_json = await resp.json()
-            user = resp_json.get("result")            
+            user = resp_json.get("result")
             user_profile = {
                 "id": id,
                 "name": user.get("name"),
@@ -89,12 +102,12 @@ class SnowAPI:
             f"sysparm_query=caller_id={caller_id}"
             f"&sysparm_display_value=true"
         )
-        session = await self.open_session()        
+        session = await self.open_session()
         async with session.get(url) as resp:
             if resp.status != 200:
                 return { "error": "Unable to get recent incidents"}
-            
-            resp_json = await resp.json()    
+
+            resp_json = await resp.json()
             result = resp_json.get("result")
             if result:
                 return { "incidents": result }
@@ -118,7 +131,7 @@ class SnowAPI:
             "caller_id": caller_id,
             "comments": "Rasa assistant opened this ticket"
         }
-        session = await self.open_session()        
+        session = await self.open_session()
         async with session.post(url, json=data) as resp:
             if resp.status != 201:
                 resp_json = await resp.json()
@@ -128,13 +141,13 @@ class SnowAPI:
                     resp_json
                 )
                 return { "error": "Unable to create incident"}
-            
-            resp_json = await resp.json()            
+
+            resp_json = await resp.json()
             return resp_json.get("result", {})
 
     @staticmethod
     def priority_db() -> Dict[str, int]:
-        """Database of supported priorities"""        
+        """Database of supported priorities"""
         return priorities
 
     @staticmethod
