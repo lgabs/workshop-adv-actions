@@ -81,7 +81,7 @@ class SnowAPI:
 
                 return anonymous_profile
 
-            if resp.headers['content-type'] != 'application/json':
+            if resp.headers['content-type'] != 'application/json;charset=UTF-8':
                 logger.error("The request was successful, but unable to load user profile. It can be that the server is hibernating. Status: %d", resp.status)
 
                 return anonymous_profile
@@ -105,7 +105,14 @@ class SnowAPI:
         session = await self.open_session()
         async with session.get(url) as resp:
             if resp.status != 200:
-                return { "error": "Unable to get recent incidents"}
+                if resp.status == 404:
+                    logger.error("Not found. Status: %d", resp.status)
+                elif resp.status == 400:
+                    logger.error("Bad Request. Some client error. Check things such as invalid syntax. Status: %d", resp.status)
+                elif resp.status in [500, 503]:
+                    logger.error("Some server error occurred. Client request may be valid or invalid, but a problem from server side occurred and the request could not be processed (e.g. server down). Status: %d", resp.status)
+
+                return { "error": "Unable to get recent incidents."}
 
             resp_json = await resp.json()
             result = resp_json.get("result")
@@ -134,12 +141,19 @@ class SnowAPI:
         session = await self.open_session()
         async with session.post(url, json=data) as resp:
             if resp.status != 201:
+                if resp.status == 404:
+                    logger.error("Not found. Status: %d", resp.status)
+                elif resp.status == 400:
+                    logger.error("Bad Request. Some client error. Check things such as invalid syntax. Status: %d", resp.status)
+                elif resp.status in [500, 503]:
+                    logger.error("Some server error occurred. Client request may be valid or invalid, but a problem from server side occurred and the request could not be processed (e.g. server down). Status: %d", resp.status)
+                else:
+                    logger.error(
+                        "Unable to create incident. Status: %d; Error: %s",
+                        resp.status,
+                        resp_json
+                    )
                 resp_json = await resp.json()
-                logger.error(
-                    "Unable to create incident. Status: %d; Error: %s",
-                    resp.status,
-                    resp_json
-                )
                 return { "error": "Unable to create incident"}
 
             resp_json = await resp.json()
