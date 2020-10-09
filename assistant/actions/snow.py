@@ -153,6 +153,7 @@ class SnowAPI:
                         resp.status,
                         resp_json
                     )
+                logger.info("Incident created successfully. Status: %d", resp.status)
                 resp_json = await resp.json()
                 return { "error": "Unable to create incident"}
 
